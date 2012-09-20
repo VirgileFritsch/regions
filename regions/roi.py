@@ -138,7 +138,7 @@ class Atlas(object):
 
             self.label_map = label_map
 
-        self.mask = (self.label_image != 0.).sum(3).astype('bool')
+        self.mask = (self.label_image != self.null_label).sum(3).astype('bool')
         self.shape = self.label_image.shape[:-1]
         self.size = self.label_image.shape[-1]
 
@@ -155,9 +155,9 @@ class Atlas(object):
 
     def add(self, region, name=None):
         if name is None:
-            self.update(region[..., None])
+            self._add(region)
         else:
-            self.update(region[..., None], [name])
+            self._add(region, name)
 
     def difference(self, label1, label2, discard_operands=False):
         mask = self.label_image[..., label2].astype('bool')
@@ -277,6 +277,59 @@ class Atlas(object):
                     self.affine, levels=[0],
                     colors=(color, ))
             return slicer
+
+    def show_2d(self, X=None, cmap_low=0., cmap_up=1., cmap=None,
+                fig_num=None):
+        if X is not None:
+            X = np.asanyarray(X.copy().reshape(-1, self.label_image.shape[-1]))
+            X = (X - cmap_low) / (cmap_up - cmap_low)
+            X[X < 0] = 0
+            X[X > 1] = 1
+        coords = np.zeros((self.label_image.shape[-1], 3))
+        sizes = np.zeros(self.label_image.shape[-1])
+        A = np.rollaxis(self.label_image, 3)
+        for i, region in enumerate(A):
+            raz_coords = np.asarray(np.where(region != 0))
+            raz_coords = np.vstack((raz_coords, np.ones(raz_coords.shape[1])))
+            xyz_coords = np.dot(self.affine, raz_coords)
+            coords[i] = np.median(xyz_coords, 1)[:-1]
+            sizes[i] = xyz_coords.shape[1]
+        ranked_rois = np.argsort(np.sum(coords ** 2, 1))
+        div = (ranked_rois.shape[0] ** ((np.arange(4)) / 3.)).astype(int)
+        div[0] = 0
+        import matplotlib.pyplot as plt
+        if fig_num is None:
+            fig = plt.figure(figsize=(3, 3))
+        else:
+            plt.figure(num=fig_num[0], figsize=(3, 3))
+        for i, (start, stop) in enumerate(zip(div[:-1], div[1:])[::-1]):
+            current_rois = ranked_rois[start:stop]
+            current_coords = coords[current_rois]
+            score = current_coords[:, 0]
+            current_rois = current_rois[np.argsort(score)[::-1]]
+            if X is None:
+                labels = np.asarray(self.labels())[current_rois]
+                #plt.pie(sizes[current_rois], radius=3 - i, labels=labels,
+                #        labeldistance=0.8)
+                plt.pie(np.ones(current_rois.size), radius=3 - i,
+                        labels=labels, labeldistance=0.8)
+                plt.xlim((-3.1, 3.1))
+                plt.ylim((-3.1, 3.1))
+            else:
+                cmap = cmap or plt.cm.jet
+                for j, obs in enumerate(X):
+                    if fig_num is None:
+                        plt.figure(num=fig.number + j, figsize=(3, 3))
+                    else:
+                        plt.figure(num=fig_num[j], figsize=(3, 3))
+                    signal = obs[current_rois]
+                    #plt.pie(sizes[current_rois], radius=3 - i,
+                    #        colors=cmap(signal))
+                    plt.pie(np.ones(current_rois.size), radius=3 - i,
+                            colors=cmap(signal))
+                    plt.xlim((-3.1, 3.1))
+                    plt.ylim((-3.1, 3.1))
+        return
 
     def save(self, location):
         img = nb.Nifti1Image(self.label_image.astype('float32'), self.affine)
