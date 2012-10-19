@@ -279,7 +279,7 @@ class Atlas(object):
             return slicer
 
     def show_2d(self, X=None, cmap_low=0., cmap_up=1., cmap=None,
-                fig_num=None):
+                fig_num=None, contributions=None, cmap_contr=None):
         if X is not None:
             X = np.asanyarray(X.copy().reshape(-1, self.label_image.shape[-1]))
             X = (X - cmap_low) / (cmap_up - cmap_low)
@@ -300,8 +300,6 @@ class Atlas(object):
         import matplotlib.pyplot as plt
         if fig_num is None:
             fig = plt.figure(figsize=(3, 3))
-        else:
-            plt.figure(num=fig_num[0], figsize=(3, 3))
         for i, (start, stop) in enumerate(zip(div[:-1], div[1:])[::-1]):
             current_rois = ranked_rois[start:stop]
             current_coords = coords[current_rois]
@@ -316,19 +314,45 @@ class Atlas(object):
                 plt.xlim((-3.1, 3.1))
                 plt.ylim((-3.1, 3.1))
             else:
-                cmap = cmap or plt.cm.jet
-                for j, obs in enumerate(X):
-                    if fig_num is None:
-                        plt.figure(num=fig.number + j, figsize=(3, 3))
-                    else:
-                        plt.figure(num=fig_num[j], figsize=(3, 3))
-                    signal = obs[current_rois]
-                    #plt.pie(sizes[current_rois], radius=3 - i,
-                    #        colors=cmap(signal))
-                    plt.pie(np.ones(current_rois.size), radius=3 - i,
-                            colors=cmap(signal))
-                    plt.xlim((-3.1, 3.1))
-                    plt.ylim((-3.1, 3.1))
+                if contributions is None:
+                    cmap = cmap or plt.cm.jet
+                    for j, obs in enumerate(X):
+                        if fig_num is None:
+                            plt.figure(num=fig.number + j, figsize=(3, 3))
+                        else:
+                            plt.figure(num=fig_num[j], figsize=(3, 3))
+                        signal = obs[current_rois]
+                        #plt.pie(sizes[current_rois], radius=3 - i,
+                        #        colors=cmap(signal))
+                        plt.pie(np.ones(current_rois.size), radius=3 - i,
+                                colors=cmap(signal))
+                        plt.xlim((-3.1, 3.1))
+                        plt.ylim((-3.1, 3.1))
+                else:
+                    cmap = cmap or plt.cm.jet
+                    cmap_contr = cmap_contr or plt.cm.Reds
+                    for j, obs in enumerate(X):
+                        if fig_num is None:
+                            plt.figure(num=fig.number + j, figsize=(3, 9))
+                        else:
+                            plt.figure(num=fig_num[j], figsize=(3, 9))
+                        plt.subplot(311)
+                        signal = obs[current_rois]
+                        plt.pie(np.ones(current_rois.size), radius=3 - i,
+                                colors=cmap(signal))
+                        plt.xlim((-3.1, 3.1))
+                        plt.ylim((-3.1, 3.1))
+                        plt.subplot(312)
+                        contr = contributions[j][current_rois]
+                        plt.pie(np.ones(current_rois.size), radius=3 - i,
+                                colors=cmap_contr(contr))
+                        plt.xlim((-3.1, 3.1))
+                        plt.ylim((-3.1, 3.1))
+                        plt.subplot(313)
+                        plt.pie(np.ones(current_rois.size), radius=3 - i,
+                                colors=cmap(2 * contr * (signal - 0.5) + 0.5))
+                        plt.xlim((-3.1, 3.1))
+                        plt.ylim((-3.1, 3.1))
         return
 
     def save(self, location):
